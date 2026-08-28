@@ -43,6 +43,7 @@ const RANGES: Record<MetricKey, Range> = {
 
 const HISTORY_LEN = 24;
 const METRIC_KEYS = Object.keys(RANGES) as MetricKey[];
+const TARGET_PULL = 0.04; // 정상 범위 중심으로 서서히 되돌아가는 힘
 
 function classify(v: number, r: Range): Severity {
   if (v <= r.dangerLow || v >= r.dangerHigh) return "danger";
@@ -97,7 +98,9 @@ export function useScadaData(): ScadaState {
         METRIC_KEYS.forEach((k) => {
           const r = RANGES[k];
           const cur = prev[k];
+          const target = (r.warnLow + r.warnHigh) / 2;
           let drift = (Math.random() - 0.5) * r.step * 2;
+          drift += (target - cur.value) * TARGET_PULL;
           if (k === "flow" && !pumpRunning) drift -= r.step * 1.5;
           const v = Math.max(r.min, Math.min(r.max, cur.value + drift));
           const status = classify(v, r);
