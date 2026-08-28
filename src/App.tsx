@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { axhub } from "./lib/axhub";
+import { useScadaData } from "./hooks/useScadaData";
+import { KpiCard } from "./components/KpiCard";
+import { ProcessDiagram } from "./components/ProcessDiagram";
+import { AlarmPanel } from "./components/AlarmPanel";
+import { TrendChart } from "./components/TrendChart";
 
 // GET /api/v1/me 응답 (axhub 백엔드). 로그인한 사용자 + 활성 테넌트 멤버십.
 type Me = {
@@ -9,121 +14,118 @@ type Me = {
 
 function App() {
   const [me, setMe] = useState<Me | null>(null);
-  // 로컬(미설정)이면 호출을 건너뛰고 안내만 — 괜한 silent SSO redirect 방지.
-  const [phase, setPhase] = useState<"loading" | "ready" | "error">(
-    axhub.isConfigured ? "loading" : "error",
-  );
+  const [now, setNow] = useState(() => new Date());
+  const { metrics, pumpRunning, valveOpen, alarms } = useScadaData();
 
   useEffect(() => {
     if (!axhub.isConfigured) return;
-    // 이 호출이 곧 "백엔드 호출 예시" 그 자체예요.
     // 브라우저가 axhub 세션 쿠키(_hub_access)를 자동 전송해요 (credentials:"include").
     axhub
       .fetch("/api/v1/me")
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setMe((await res.json()) as Me);
-        setPhase("ready");
       })
-      .catch(() => setPhase("error"));
+      .catch(() => {
+        /* 상단 상태바는 로그인 실패 시 "로컬 실행"으로만 표시하고, 화면은 계속 보여줘요. */
+      });
   }, []);
 
-  const tenant = me?.tenants?.[0];
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const activeAlarmCount = alarms.filter((a) => a.severity !== "normal").length;
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[var(--bg-surface)] text-[var(--fg-default)]">
-      {/* 은은한 블루 글로우 (axhub primary-soft) */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-48 left-1/2 -z-10 h-[40rem] w-[40rem] -translate-x-1/2 rounded-full bg-[var(--primary-soft)] opacity-70 blur-3xl"
-      />
-
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-7 px-6 py-20">
-        {/* 히어로 */}
-        <header className="flex flex-col items-center text-center">
-          <div className="relative mb-5 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[14px] bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] text-lg font-bold text-white shadow-lg">
-            <span className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent" />
-            <span className="relative">ax</span>
+    <main className="min-h-screen bg-[var(--bg-surface)] text-[var(--fg-default)]">
+      <div className="mx-auto max-w-6xl px-5 py-6">
+        {/* 상단 상태바 */}
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-content)] px-5 py-3.5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] text-sm font-bold text-white">
+              SC
+            </div>
+            <div>
+              <h1 className="text-sm font-bold leading-tight">울산화학 SCADA 관제 시스템</h1>
+              <p className="text-[11px] text-[var(--fg-subtle)]">공정 1라인 · 실시간 모니터링</p>
+            </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary-soft)] px-3 py-1 text-xs font-semibold text-[var(--primary)]">
-            vibe-coding starter
-          </span>
-          <h1 className="mt-4 text-[2.75rem] font-extrabold leading-tight tracking-[-0.03em]">
-            axhub <span className="text-[var(--primary)]">×</span> Vite
-          </h1>
-          <p className="mt-2.5 max-w-sm text-[15px] leading-relaxed text-[var(--fg-muted)]">
-            백엔드 · 인증 · 배포가 이미 연결된 스타터예요. 화면만 만들면 돼요.
-          </p>
+
+          <div className="flex flex-wrap items-center gap-4">
+            {activeAlarmCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--danger-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--danger)]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--danger)]" />
+                활성 알람 {activeAlarmCount}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--fg-muted)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+              시스템 연결됨
+            </span>
+            <span className="tabular-nums text-[11px] text-[var(--fg-muted)]">
+              {now.toLocaleTimeString("ko-KR", { hour12: false })}
+            </span>
+            <span className="text-[11px] text-[var(--fg-subtle)]">
+              {me ? `${me.user.name}님` : axhub.isConfigured ? "로그인 확인 중…" : "로컬 실행"}
+            </span>
+          </div>
         </header>
 
-        {/* 환영 카드 — GET /api/v1/me 결과 */}
-        <section className="w-full rounded-2xl border border-[var(--border-default)] bg-[var(--bg-content)] p-7 text-center shadow-sm">
-          {phase === "loading" && (
-            <>
-              <span className="mx-auto mb-3 block h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--primary)]" />
-              <p className="text-sm text-[var(--fg-muted)]">로그인 정보를 불러오는 중…</p>
-            </>
-          )}
-          {phase === "ready" && me && (
-            <>
-              <span className="relative mx-auto mb-3 flex h-2.5 w-2.5 items-center justify-center">
-                <span className="absolute h-2.5 w-2.5 animate-ping rounded-full bg-[var(--success)] opacity-60" />
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--success)]" />
-              </span>
-              <p className="text-xl font-bold tracking-[-0.01em]">환영합니다, {me.user.name}님 👋</p>
-              <p className="mt-1.5 text-sm text-[var(--fg-muted)]">
-                {me.user.email}
-                {tenant && ` · ${tenant.tenant_slug} (${tenant.role})`}
-              </p>
-            </>
-          )}
-          {phase === "error" && (
-            <>
-              <span className="mx-auto mb-3 block h-2.5 w-2.5 rounded-full bg-[var(--warning)]" />
-              <p className="text-[15px] font-semibold text-[var(--fg-default)]">
-                {axhub.isConfigured
-                  ? "로그인 정보를 불러오지 못했어요. axhub 로그인 상태를 확인해 주세요."
-                  : "로컬 실행 중"}
-              </p>
-              {!axhub.isConfigured && (
-                <p className="mt-1.5 text-sm text-[var(--fg-muted)]">
-                  axhub 로 배포하면 로그인한 사용자가 여기 표시돼요.
-                </p>
-              )}
-            </>
-          )}
-        </section>
-
-        {/* 다음 단계 */}
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
-          <Step n="1" title="화면 만들기" code="src/App.tsx" />
-          <Step n="2" title="백엔드 호출" code="axhub.fetch()" />
-          <Step n="3" title="배포" code="/axhub:deploy" />
+        {/* KPI 카드 */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiCard
+            label={metrics.temperature.label}
+            value={metrics.temperature.value}
+            unit={metrics.temperature.unit}
+            status={metrics.temperature.status}
+            history={metrics.temperature.history}
+          />
+          <KpiCard
+            label={metrics.pressure.label}
+            value={metrics.pressure.value}
+            unit={metrics.pressure.unit}
+            status={metrics.pressure.status}
+            history={metrics.pressure.history}
+          />
+          <KpiCard
+            label={metrics.flow.label}
+            value={metrics.flow.value}
+            unit={metrics.flow.unit}
+            status={metrics.flow.status}
+            history={metrics.flow.history}
+          />
+          <KpiCard
+            label={metrics.level.label}
+            value={metrics.level.value}
+            unit={metrics.level.unit}
+            status={metrics.level.status}
+            history={metrics.level.history}
+          />
         </div>
 
-        <footer className="flex flex-col items-center gap-1 pt-1 text-center">
-          <p className="text-xs text-[var(--fg-subtle)]">Vite · React · Tailwind · TypeScript</p>
-          <p className="text-[11px] text-[var(--fg-subtle)]">
-            이 앱 슬러그:{" "}
-            <code className="rounded bg-[var(--primary-soft)] px-1 text-[var(--primary)]">
-              {axhub.slug || "(로컬 실행)"}
-            </code>
-          </p>
+        {/* 공정 흐름도 + 알람 로그 */}
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <ProcessDiagram
+            level={metrics.level.value}
+            levelStatus={metrics.level.status}
+            pumpRunning={pumpRunning}
+            valveOpen={valveOpen}
+          />
+          <AlarmPanel alarms={alarms} />
+        </div>
+
+        {/* 트렌드 차트 */}
+        <div className="mt-4">
+          <TrendChart metrics={metrics} />
+        </div>
+
+        <footer className="mt-6 text-center text-[11px] text-[var(--fg-subtle)]">
+          Vite · React · Tailwind — 데이터는 시뮬레이션 값이에요 (실제 설비 값 아님)
         </footer>
       </div>
     </main>
-  );
-}
-
-function Step({ n, title, code }: { n: string; title: string; code: string }) {
-  return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-content)] p-4 transition hover:border-[var(--primary)] hover:shadow-sm">
-      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--primary-soft)] text-xs font-bold text-[var(--primary)]">
-        {n}
-      </div>
-      <p className="mt-2.5 text-sm font-semibold">{title}</p>
-      <code className="mt-1 block truncate text-[11px] text-[var(--fg-subtle)]">{code}</code>
-    </div>
   );
 }
 
@@ -138,11 +140,12 @@ export default App;
  * 401 이면 헬퍼가 silent SSO 로 재인증한다. API 키를 코드에 넣지 않는다.
  * 설정(API_BASE·slug)은 배포 시 src/lib/axhub.ts 에 자동 주입된다.
  *
- * 1) 내 정보 · Hub API  (위 환영 메시지가 이 호출 결과)
+ * 1) 내 정보 · Hub API  (위 상단 상태바가 이 호출 결과)
  *    const res = await axhub.fetch("/api/v1/me");
  *    const me = await res.json(); // { user, tenants }
  *
  * 2) 데이터 저장/조회가 필요하면?
  *    이 템플릿은 정적 SPA 라 자체 데이터베이스가 없어요. 데이터 저장/조회가 필요하면
  *    서버 템플릿(nextjs-axhub / astro-axhub)을 쓰세요 — 거기선 표준 Postgres 를 써요.
+ *    (이 SCADA 화면의 온도/압력/유량/레벨 값은 실데이터가 아니라 브라우저 시뮬레이션이다 — src/hooks/useScadaData.ts)
  * ───────────────────────────────────────────────────────────────────────────── */

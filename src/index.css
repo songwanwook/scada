@@ -22,7 +22,11 @@
   --border-default: #e4e5e8;
 
   --success: #27c961;
+  --success-soft: rgba(39, 201, 97, 0.14);
   --warning: #f6c205;
+  --warning-soft: rgba(246, 194, 5, 0.16);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,7 +46,11 @@
     --border-default: rgba(255, 255, 255, 0.1);
 
     --success: #3ddb78;
+    --success-soft: rgba(61, 219, 120, 0.22);
     --warning: #ffe246;
+    --warning-soft: rgba(255, 226, 70, 0.2);
+    --danger: #ff6369;
+    --danger-soft: rgba(255, 99, 105, 0.22);
   }
 }
 
@@ -52,4 +60,14 @@ body {
   font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui,
     "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* SCADA 공정도 배관 흐름 애니메이션 */
+@keyframes scada-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+.scada-flow {
+  animation: scada-flow 0.6s linear infinite;
 }
